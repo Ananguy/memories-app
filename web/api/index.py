@@ -1,3 +1,9 @@
+import os
+# Set default environment variables for Vercel if not set
+os.environ.setdefault('USERNAME', 'ananb')
+os.environ.setdefault('PASSWORD', 'MICKKY')
+os.environ.setdefault('SECRET_KEY', 'fallback_secret_key_for_vercel')
+
 from flask import Flask
 import app as flask_app
 
