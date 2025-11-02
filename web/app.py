@@ -60,23 +60,27 @@ def upload_file():
         flash('No file part in the form ❌')
         return redirect(url_for('index'))
 
-    file = request.files['file']
+    files = request.files.getlist('file')
 
-    if file.filename == '':
+    if not files or all(file.filename == '' for file in files):
         flash('No file selected ⚠️')
         return redirect(url_for('index'))
 
-    if file and allowed_file(file.filename):
-        # Generate unique filename to prevent overwriting
-        name, ext = os.path.splitext(secure_filename(file.filename))
-        unique_filename = f"{uuid.uuid4().hex}_{name}{ext}"
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-        file.save(save_path)
-        flash('File uploaded successfully 💖')
-        return redirect(url_for('index'))
+    uploaded_count = 0
+    for file in files:
+        if file and allowed_file(file.filename):
+            # Generate unique filename to prevent overwriting
+            name, ext = os.path.splitext(secure_filename(file.filename))
+            unique_filename = f"{uuid.uuid4().hex}_{name}{ext}"
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+            file.save(save_path)
+            uploaded_count += 1
+
+    if uploaded_count > 0:
+        flash(f'{uploaded_count} file(s) uploaded successfully 💖')
     else:
-        flash('Unsupported file type ❌')
-        return redirect(url_for('index'))
+        flash('No valid files uploaded ❌')
+    return redirect(url_for('index'))
 
 
 @app.route('/delete/<filename>', methods=['POST'])
