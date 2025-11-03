@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 import os
 import uuid
+import boto3
+from botocore.exceptions import NoCredentialsError
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
@@ -12,15 +14,22 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'fallback_secret_key')
 
-# Folder for uploaded files
-UPLOAD_FOLDER = os.path.join('static', 'uploads')
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# AWS S3 Configuration
+S3_BUCKET = os.getenv('S3_BUCKET_NAME')
+S3_REGION = os.getenv('S3_REGION')
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+# Initialize S3 client
+s3_client = boto3.client(
+    's3',
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    region_name=S3_REGION
+)
 
 # Allowed file extensions
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'avi', 'mkv'}
-
-# Ensure upload directory exists
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Password configuration from environment variables
 USERNAME = os.getenv('USERNAME')
@@ -48,14 +57,26 @@ def allowed_file(filename):
 @login_required
 def index():
     """Show upload form + gallery"""
-    files = sorted(os.listdir(app.config['UPLOAD_FOLDER']), key=lambda x: os.path.getmtime(os.path.join(app.config['UPLOAD_FOLDER'], x)), reverse=True)
+    try:
+        # List objects in S3 bucket
+        response = s3_client.list_objects_v2(Bucket=S3_BUCKET)
+        files = []
+        if 'Contents' in response:
+            # Sort by last modified, most recent first
+            files = sorted([obj['Key'] for obj in response['Contents']], key=lambda x: response['Contents'][[obj['Key'] for obj in response['Contents']].index(x)]['LastModified'], reverse=True)
+    except NoCredentialsError:
+        flash('AWS credentials not available ❌')
+        files = []
+    except Exception as e:
+        flash(f'Error loading files: {str(e)} ❌')
+        files = []
     return render_template('index.html', files=files)
 
 
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload_file():
-    """Handle file uploads"""
+    """Handle file uploads to S3"""
     if 'file' not in request.files:
         flash('No file part in the form ❌')
         return redirect(url_for('index'))
@@ -72,9 +93,16 @@ def upload_file():
             # Generate unique filename to prevent overwriting
             name, ext = os.path.splitext(secure_filename(file.filename))
             unique_filename = f"{uuid.uuid4().hex}_{name}{ext}"
-            save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-            file.save(save_path)
-            uploaded_count += 1
+            try:
+                # Upload to S3
+                s3_client.upload_fileobj(file, S3_BUCKET, unique_filename)
+                uploaded_count += 1
+            except NoCredentialsError:
+                flash('AWS credentials not available ❌')
+                return redirect(url_for('index'))
+            except Exception as e:
+                flash(f'Upload failed: {str(e)} ❌')
+                return redirect(url_for('index'))
 
     if uploaded_count > 0:
         flash(f'{uploaded_count} file(s) uploaded successfully 💖')
@@ -86,13 +114,14 @@ def upload_file():
 @app.route('/delete/<filename>', methods=['POST'])
 @login_required
 def delete_file(filename):
-    """Delete selected file"""
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
+    """Delete selected file from S3"""
+    try:
+        s3_client.delete_object(Bucket=S3_BUCKET, Key=filename)
         flash(f'{filename} deleted successfully 🗑️')
-    else:
-        flash('File not found ❌')
+    except NoCredentialsError:
+        flash('AWS credentials not available ❌')
+    except Exception as e:
+        flash(f'Delete failed: {str(e)} ❌')
     return redirect(url_for('index'))
 
 
