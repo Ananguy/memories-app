@@ -14,7 +14,7 @@
         <div class="header-buttons">
             <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
         </div>
-        <p class="subtitle">Upload all our photos and videos here, safe forever on AWS S3 ✨</p>
+        <p class="subtitle">Upload all our photos and videos here, safe forever on Cloudinary ✨</p>
 
         <!-- Upload Form -->
         <form action="/upload" method="POST" enctype="multipart/form-data">
@@ -39,11 +39,11 @@
             {% for file in files %}
                 <div class="media-item" data-filename="{{ file }}">
                     {% if file.endswith(('png', 'jpg', 'jpeg', 'gif')) %}
-                        <img src="https://{{ S3_BUCKET }}.s3.{{ S3_REGION }}.amazonaws.com/{{ file }}" alt="{{ file }}">
+                        <img src="https://res.cloudinary.com/{{ CLOUDINARY_CLOUD_NAME }}/image/upload/{{ file.rsplit('.', 1)[0] }}" alt="{{ file }}">
                     {% elif file.endswith(('mp4', 'mov', 'avi', 'mkv')) %}
                         <div class="video-container">
                             <video preload="metadata">
-                                <source src="https://{{ S3_BUCKET }}.s3.{{ S3_REGION }}.amazonaws.com/{{ file }}" type="video/mp4">
+                                <source src="https://res.cloudinary.com/{{ CLOUDINARY_CLOUD_NAME }}/video/upload/{{ file.rsplit('.', 1)[0] }}" type="video/mp4">
                                 Your browser does not support the video tag.
                             </video>
                             <div class="play-overlay"><div class="play-circle">PLAY</div></div>

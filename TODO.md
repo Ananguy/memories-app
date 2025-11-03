@@ -1,14 +1,26 @@
-# TODO: Implement AWS S3 for Permanent File Storage
+# TODO: Implement Cloudinary for Permanent File Storage
 
-## Steps to Complete
-- [x] Add boto3 to requirements.txt
-- [x] Update .env.example with AWS environment variables
-- [x] Modify web/app.py to integrate S3 for uploads, serving, and deletions
-- [x] Update web/templates/index.html to use S3 URLs for media
-- [x] Testing skipped (user will test on Render)
-- [x] Deploy and verify persistence on Render (user's responsibility)
+## Steps Completed
+- [x] Replace AWS S3 with Cloudinary for permanent storage
+- [x] Update requirements.txt to include cloudinary
+- [x] Update .env.example with Cloudinary credentials
+- [x] Modify app.py to use Cloudinary API for uploads, listing, and deletions
+- [x] Update templates to use Cloudinary URLs
+- [x] Create test script for Cloudinary connection
+- [x] Test Cloudinary connection (successful - 10 files found)
+
+## Next Steps
+- [ ] Deploy to Render and set environment variables
+- [ ] Test file uploads and persistence after deployment
 
 ## Notes
-- Ensure AWS credentials are set in Render environment variables: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET_NAME, S3_REGION
-- Create S3 bucket with public read access for uploaded files
-- Handle S3 errors gracefully in the app
+- Cloudinary credentials are configured and working
+- Free tier: 25GB storage + 25GB monthly bandwidth
+- Files will persist permanently unlike ephemeral storage
+- Set these environment variables in Render:
+  - CLOUDINARY_CLOUD_NAME=dtsn0vav0
+  - CLOUDINARY_API_KEY=886513839827951
+  - CLOUDINARY_API_SECRET=XulYphZ7i7uULHrBzLZznnxfF58
+  - USERNAME=ananb
+  - PASSWORD=MICKKY
+  - SECRET_KEY=fallback_secret_key_for_vercel

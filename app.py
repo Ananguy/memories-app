@@ -1,12 +1,13 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 import os
 import uuid
-import boto3
-from botocore.exceptions import NoCredentialsError
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
 from dotenv import load_dotenv
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 # Load environment variables
 load_dotenv()
@@ -14,18 +15,11 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'fallback_secret_key')
 
-# AWS S3 Configuration
-S3_BUCKET = os.getenv('S3_BUCKET_NAME')
-S3_REGION = os.getenv('S3_REGION')
-AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
-
-# Initialize S3 client
-s3_client = boto3.client(
-    's3',
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-    region_name=S3_REGION
+# Configure Cloudinary
+cloudinary.config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.getenv('CLOUDINARY_API_KEY'),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
 
 # Allowed file extensions
@@ -58,15 +52,13 @@ def allowed_file(filename):
 def index():
     """Show upload form + gallery"""
     try:
-        # List objects in S3 bucket
-        response = s3_client.list_objects_v2(Bucket=S3_BUCKET)
+        # List resources from Cloudinary
+        result = cloudinary.api.resources(type='upload', max_results=500)
         files = []
-        if 'Contents' in response:
-            # Sort by last modified, most recent first
-            files = sorted([obj['Key'] for obj in response['Contents']], key=lambda x: response['Contents'][[obj['Key'] for obj in response['Contents']].index(x)]['LastModified'], reverse=True)
-    except NoCredentialsError:
-        flash('AWS credentials not available ❌')
-        files = []
+        if 'resources' in result:
+            # Sort by created_at, most recent first
+            files = sorted([resource['public_id'] + '.' + resource['format'] for resource in result['resources']],
+                         key=lambda x: next((r['created_at'] for r in result['resources'] if r['public_id'] + '.' + r['format'] == x), ''), reverse=True)
     except Exception as e:
         flash(f'Error loading files: {str(e)} ❌')
         files = []
@@ -76,7 +68,7 @@ def index():
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload_file():
-    """Handle file uploads to S3"""
+    """Handle file uploads to Cloudinary"""
     if 'file' not in request.files:
         flash('No file part in the form ❌')
         return redirect(url_for('index'))
@@ -90,16 +82,13 @@ def upload_file():
     uploaded_count = 0
     for file in files:
         if file and allowed_file(file.filename):
-            # Generate unique filename to prevent overwriting
+            # Generate unique public_id to prevent overwriting
             name, ext = os.path.splitext(secure_filename(file.filename))
-            unique_filename = f"{uuid.uuid4().hex}_{name}{ext}"
+            unique_public_id = f"{uuid.uuid4().hex}_{name}"
             try:
-                # Upload to S3
-                s3_client.upload_fileobj(file, S3_BUCKET, unique_filename)
+                # Upload to Cloudinary
+                result = cloudinary.uploader.upload(file, public_id=unique_public_id, resource_type='auto')
                 uploaded_count += 1
-            except NoCredentialsError:
-                flash('AWS credentials not available ❌')
-                return redirect(url_for('index'))
             except Exception as e:
                 flash(f'Upload failed: {str(e)} ❌')
                 return redirect(url_for('index'))
@@ -114,12 +103,15 @@ def upload_file():
 @app.route('/delete/<filename>', methods=['POST'])
 @login_required
 def delete_file(filename):
-    """Delete selected file from S3"""
+    """Delete selected file from Cloudinary"""
     try:
-        s3_client.delete_object(Bucket=S3_BUCKET, Key=filename)
-        flash(f'{filename} deleted successfully 🗑️')
-    except NoCredentialsError:
-        flash('AWS credentials not available ❌')
+        # Extract public_id from filename (remove extension)
+        public_id = filename.rsplit('.', 1)[0]
+        result = cloudinary.uploader.destroy(public_id)
+        if result.get('result') == 'ok':
+            flash(f'{filename} deleted successfully 🗑️')
+        else:
+            flash(f'Failed to delete {filename} ❌')
     except Exception as e:
         flash(f'Delete failed: {str(e)} ❌')
     return redirect(url_for('index'))
