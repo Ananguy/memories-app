@@ -143,6 +143,21 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.route('/debug')
+@login_required
+def debug():
+    """Debug endpoint to check environment variables"""
+    debug_info = {
+        'CLOUDINARY_CLOUD_NAME': 'Set' if os.getenv('CLOUDINARY_CLOUD_NAME') else 'Missing',
+        'CLOUDINARY_API_KEY': 'Set' if os.getenv('CLOUDINARY_API_KEY') else 'Missing',
+        'CLOUDINARY_API_SECRET': 'Set' if os.getenv('CLOUDINARY_API_SECRET') else 'Missing',
+        'USERNAME': 'Set' if os.getenv('USERNAME') else 'Missing',
+        'PASSWORD': 'Set' if os.getenv('PASSWORD') else 'Missing',
+        'SECRET_KEY': 'Set' if os.getenv('SECRET_KEY') else 'Missing'
+    }
+    return jsonify(debug_info)
+
+
 # Vercel deployment
 def handler(event, context):
     return app(event, context)
